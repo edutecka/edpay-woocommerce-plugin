@@ -158,16 +158,20 @@ function init_edpay_gateway_class()
                 'amount_minor'   => $amount_minor,
                 'currency'       => $currency,
                 'reference'      => 'WC-' . $order->get_id(),
-                'success_url'    => $success_url,
+                'return_url'     => $success_url,
                 'cancel_url'     => $cancel_url,
-                'customer_email' => $order->get_billing_email(),
+                'customer'       => [
+                    'name'  => $order->get_formatted_billing_full_name(),
+                    'email' => $order->get_billing_email(),
+                    'phone' => $order->get_billing_phone(),
+                ],
                 'metadata'       => [
                     'order_id'    => $order->get_id(),
                     'platform'    => 'woocommerce',
                 ],
             ];
 
-            $response = wp_remote_post($this->get_base_url() . '/v1/checkout/sessions', [
+            $response = wp_remote_post($this->get_base_url() . '/v1/payments', [
                 'timeout' => 30,
                 'headers' => [
                     'X-EDPay-Public-Key'  => $this->publicKey,
@@ -185,23 +189,24 @@ function init_edpay_gateway_class()
 
             $status_code = wp_remote_retrieve_response_code($response);
             $body = json_decode(wp_remote_retrieve_body($response), true);
+            $checkout_url = $body['payment_url'] ?? $body['checkout_url'] ?? null;
 
-            if ($status_code < 200 || $status_code >= 300 || empty($body['checkout_url'])) {
-                $msg = $body['message'] ?? __('Não foi possível iniciar a sessão de checkout na EDPay.', 'edpay-woocommerce');
+            if ($status_code < 200 || $status_code >= 300 || empty($checkout_url)) {
+                $msg = $body['message'] ?? __('Não foi possível iniciar o pagamento na EDPay.', 'edpay-woocommerce');
                 wc_add_notice($msg, 'error');
                 return ['result' => 'fail'];
             }
 
             // Marcar encomenda como a aguardar pagamento
-            $order->update_status('on-hold', __('Aguardando pagamento na EDPay (sessão iniciada).', 'edpay-woocommerce'));
-            $order->update_meta_data('_edpay_session_id', $body['id']);
+            $order->update_status('on-hold', __('Aguardando pagamento na EDPay.', 'edpay-woocommerce'));
+            $order->update_meta_data('_edpay_payment_id', $body['id'] ?? $body['payment_id'] ?? '');
             $order->save();
 
             WC()->cart->empty_cart();
 
             return [
                 'result'   => 'success',
-                'redirect' => $body['checkout_url'],
+                'redirect' => $checkout_url,
             ];
         }
 
