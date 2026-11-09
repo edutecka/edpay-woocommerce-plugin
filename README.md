@@ -1,76 +1,86 @@
-# Plugin Oficial EDPay para WooCommerce (WordPress)
+# EDPay for WooCommerce
 
-[![Tested with WooCommerce](https://img.shields.io/badge/WooCommerce-8.0%2B-blue.svg)](https://woocommerce.com/)
-[![WordPress Version](https://img.shields.io/badge/WordPress-6.0%2B-blue.svg)](https://wordpress.org/)
-[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
+The official EDPay WooCommerce integration is an **early preview/beta**. It has not been established as production-ready. Install it on a test store, use Sandbox first, and validate the complete payment and webhook flow before considering a live deployment.
 
-Integre a plataforma **EDPay** na sua loja virtual WordPress / WooCommerce para receber pagamentos através de canais locais e internacionais em Moçambique:
-- Carteiras Móveis: **M-Pesa (Vodacom)** e **e-Mola (Movitel)** com prompt USSD interativo em tempo real
-- Cartões de Débito / Crédito: **Visa** e **Mastercard** com autenticação 3D Secure 2
-- Carteiras Digitais: **Apple Pay** e **Google Pay**
-- **Referências Bancárias**: Millennium BIM / SimoRede
+The current implementation creates a payment request from the store server, redirects the customer to a payment URL returned by EDPay, and updates the WooCommerce order after validating a webhook. It is a gateway-agnostic integration; payment routing and supported methods depend on EDPay and the merchant account.
 
----
+## Requirements
 
-## Requisitos
+- WordPress 6.0 or later
+- WooCommerce 8.0 or later
+- PHP 8.1 or later with the `curl`, `json`, and `hash` extensions
+- An EDPay merchant account with Sandbox credentials and a webhook secret
 
-- WordPress 6.0 ou superior
-- WooCommerce 8.0 ou superior
-- PHP 8.1 ou superior (com extensões `curl`, `json`, `hash`)
-- Moeda da loja: **Metical (MZN)** ou conversão automática ativa
-- Conta ativa na EDPay ([https://edpay.co.mz/register](https://edpay.co.mz/register))
+The plugin declares WooCommerce compatibility through version 9.2 and declares HPOS compatibility in its code. These declarations are not a substitute for testing against your store's exact WordPress and WooCommerce versions.
 
----
+## Install the preview
 
-## Instalação
+From the WordPress installation directory, clone the repository into the plugins directory:
 
-### Opção 1: Instalação via WP-CLI (Recomendada para Servidores)
 ```bash
-wp plugin install https://github.com/edutecka/edpay-woocommerce-plugin/archive/refs/heads/main.zip --activate
+git clone https://github.com/edutecka/edpay-woocommerce-plugin.git wp-content/plugins/edpay-woocommerce-plugin
 ```
 
-### Opção 2: Instalação Manual via Painel WordPress
-1. Descarregue o ficheiro `.zip` da release mais recente.
-2. No painel de administração do WordPress, aceda a **Plugins** &gt; **Adicionar Novo** &gt; **Enviar Plugin**.
-3. Selecione o ficheiro descarregado e clique em **Instalar Agora**.
-4. Clique em **Activar Plugin**.
+Then open **WordPress Admin → Plugins** and activate **EDPay Multi-Gateway Checkout**. This repository currently provides a source checkout; do not assume that a packaged or signed release is available.
 
----
+## Configure Sandbox
 
-## Configuração
+1. In WordPress Admin, open **WooCommerce → Settings → Payments → EDPay Multi-Gateway Checkout**.
+2. Enable the payment method and select **Sandbox**.
+3. Enter the Sandbox public key (`pk_test_...`), private key (`sk_test_...`), and webhook secret (`whsec_...`). Keep the private key and webhook secret on the server.
+4. Save the settings and place test orders.
 
-1. Aceda a **WooCommerce** &gt; **Configurações** &gt; separador **Pagamentos**.
-2. Localize **EDPay Multi-Gateway Checkout** e clique em **Gerir**.
-3. Preencha os campos obrigatórios:
-   - **Ambiente**: Selecione `Sandbox (Testes)` ou `Produção (Live)`.
-   - **Chave Pública**: `pk_live_...` (ou `pk_test_...`).
-   - **Chave Privada**: `sk_live_...` (ou `sk_test_...`).
-   - **Segredo do Webhook**: `whsec_...` gerado no console EDPay.
-   - **Mensagem USSD e-Mola**: Mensagem opcional de até 100 caracteres enviada no prompt do telemóvel Movitel.
-4. Clique em **Guardar alterações**.
+The current code selects `https://sandbox-api.edpay.co.mz` for Sandbox and `https://api.edpay.co.mz` for Production. These API URLs are fixed in the plugin; confirm that they are correct for your EDPay account before testing.
 
----
+## Current checkout behavior and limitations
 
-## Webhook Endpoint
+For a WooCommerce order, the plugin sends `amount_minor`, `currency`, a `WC-{order ID}` reference, return and cancel URLs, customer details, and order metadata to `POST /v1/payments`. It authenticates with `X-EDPay-Public-Key` and `X-EDPay-Private-Key`. The plugin redirects to the response's `payment_url` or `checkout_url` field.
 
-Configure o seguinte URL no seu Dashboard EDPay (**Desenvolvedores &gt; Webhooks**):
+This preview does not currently expose a payment-method selector or send a `method` field, and it does not send an `Idempotency-Key`. Confirm the required request fields and payment routing with EDPay before relying on this integration. Do not treat the customer's return to the store as proof of payment.
+
+## Configure and test the webhook
+
+In the EDPay dashboard, register this callback URL, replacing the hostname with your store's HTTPS hostname:
+
+```text
+https://store.example/?wc-api=edpay_webhook
 ```
-https://seusite.co.mz/?wc-api=edpay_webhook
-```
-Eventos recomendados a subscrever:
-- `payment.succeeded`
-- `payment.failed`
-- `payment.canceled`
 
----
+Configure the webhook secret in the WooCommerce payment settings and subscribe to the payment lifecycle events your store needs. The plugin validates `X-EDPay-Signature` with HMAC-SHA256, then handles `payment.succeeded`, `payment.failed`, and `payment.canceled` events using the order ID in `data.metadata.order_id`.
 
-## Condições Comerciais & Liquidação
+Before considering a live deployment, test successful, failed, and canceled payments, repeated webhook deliveries, invalid signatures, and missing or malformed webhook data in Sandbox. Confirm that duplicate deliveries do not cause unacceptable behavior for your store.
 
-- Tarifa unificada plana de **6,00%** em Meticais (MZN) sem custos fixos de adesão.
-- Liquidação bancária direta para a conta do comerciante no prazo de **2 a 7 dias úteis**.
+## Security
 
----
+- Never expose `sk_test_...`, `sk_live_...`, or `whsec_...` in browser code, public repositories, logs, or support screenshots.
+- Keep the API private key and webhook secret on the server.
+- Use HTTPS for the store and webhook endpoint.
+- Verify payment state from validated webhooks, not from a customer redirect or return URL.
 
-## Licença
+## Documentation
 
-GPLv3 ou posterior.
+- [WooCommerce integration guide](https://docs-pay.edutecka.com/plugins/woocommerce/)
+- [Payments API reference](https://docs-pay.edutecka.com/api/payments/)
+- [Webhook integration guide](https://docs-pay.edutecka.com/api/webhooks/)
+
+## License
+
+The plugin header declares GPL-3.0-or-later.
+
+## Other official SDK repositories
+
+- [JavaScript / TypeScript](https://github.com/edutecka/edpay-javascript-sdk)
+- [Python](https://github.com/edutecka/edpay-python-sdk)
+- [PHP](https://github.com/edutecka/edpay-php-sdk)
+- [Java](https://github.com/edutecka/edpay-java-sdk)
+- [.NET](https://github.com/edutecka/edpay-dot-net-sdk)
+
+## Other official e-commerce plugin repositories
+
+These repositories are official integration previews. Check each repository's status and test it in a sandbox before using it with a live store.
+
+- [Shopify](https://github.com/edutecka/edpay-shopify-app)
+- [Magento / Adobe Commerce](https://github.com/edutecka/edpay-magento2-module)
+- [PrestaShop](https://github.com/edutecka/edpay-prestashop-module)
+- [OpenCart](https://github.com/edutecka/edpay-opencart-extension)
+- [WHMCS](https://github.com/edutecka/edpay-whmcs-gateway)
