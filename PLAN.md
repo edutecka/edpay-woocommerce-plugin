@@ -1,30 +1,30 @@
-# Roadmap & Plano de Arquitetura - EDPay WooCommerce Plugin
+# Roadmap and Architecture Plan - EDPay WooCommerce Plugin
 
-## Objectivos
-1. Disponibilizar gateway oficial certificado para lojas online WooCommerce com suporte a checkout alojado e checkout transparente.
-2. Tratamento robusto de webhooks com verificação HMAC SHA-256 e idempotência para evitar duplicação de aprovação de encomendas.
-3. Compatibilidade com High-Performance Order Storage (HPOS) do WooCommerce.
+## Objectives
+1. Develop an EDPay gateway integration for WooCommerce stores with hosted and direct checkout support.
+2. Handle webhooks with HMAC-SHA256 verification and idempotency to avoid duplicate order approvals.
+3. Support WooCommerce High-Performance Order Storage (HPOS).
 
 ---
 
-## Fases de Desenvolvimento
+## Development Phases
 
-### Fase 1: Gateway Core & Definições (Concluído)
-- [x] Registo da classe `WC_Gateway_EDPay` herdada de `WC_Payment_Gateway`.
-- [x] Declaração de suporte a `products`, `refunds`, `woocommerce_blocks`.
-- [x] Formulário de definições (Chaves API, ambiente, segredo de webhook, mensagem USSD).
-- [x] Suporte à moeda Metical Moçambicano (`MZN`).
+### Phase 1: Gateway Core and Settings (Complete)
+- [x] Register the `WC_Gateway_EDPay` class extending `WC_Payment_Gateway`.
+- [x] Declare support for `products` and `refunds`.
+- [x] Add a settings form for API keys, environment, webhook secret, and USSD message.
+- [x] Support the Mozambican metical (`MZN`).
 
-### Fase 2: Processamento de Checkout & Sessão Alojada (Concluído)
-- [x] Criação de sessão de checkout através do endpoint `POST /v1/checkout/sessions`.
-- [x] Redirecionamento seguro para a página de pagamento EDPay.
-- [x] Handlers de retorno de sucesso (`return_url`) e cancelamento (`cancel_url`).
+### Phase 2: Checkout Processing and Hosted Session (Complete)
+- [x] Create a payment request through `POST /v1/payments`.
+- [x] Redirect to the EDPay hosted payment page.
+- [x] Configure success (`return_url`) and cancellation (`cancel_url`) return URLs.
 
-### Fase 3: Webhook IPN Listener (Concluído)
-- [x] Handler no endpoint `?wc-api=edpay_webhook`.
-- [x] Validação em tempo constante da assinatura HMAC SHA-256 (`hash_equals`).
-- [x] Transição de estado de encomenda (`wc-processing` / `wc-completed` ao receber `payment.succeeded`).
+### Phase 3: Webhook IPN Listener (Complete)
+- [x] Handle requests at `?wc-api=edpay_webhook`.
+- [x] Verify HMAC-SHA256 signatures with `hash_equals`.
+- [x] Update the order state after receiving `payment.succeeded`.
 
-### Fase 4: WooCommerce Blocks & Checkout Moderno (Em Planeamento)
-- [ ] Integração com o bloco de Checkout nativo do WooCommerce (Gutenberg Blocks).
-- [ ] Pré-visualização do prompt USSD no checkout transparente.
+### Phase 4: WooCommerce Blocks and Modern Checkout (Planned)
+- [ ] Integrate with the native WooCommerce Checkout block (Gutenberg Blocks).
+- [ ] Preview the USSD prompt in direct checkout.

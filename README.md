@@ -27,16 +27,16 @@ Then open **WordPress Admin → Plugins** and activate **EDPay Multi-Gateway Che
 
 1. In WordPress Admin, open **WooCommerce → Settings → Payments → EDPay Multi-Gateway Checkout**.
 2. Enable the payment method and select **Sandbox**.
-3. Enter the Sandbox public key (`pk_test_...`), private key (`sk_test_...`), and webhook secret (`whsec_...`). Keep the private key and webhook secret on the server.
+3. Enter the Sandbox public key (`pk_test_...`), matching private key (`sk_test_...`), and webhook secret (`whsec_...`). Both API keys are required together and must use the same environment; the plugin checks this before creating a payment. Keep the private key and webhook secret on the server.
 4. Save the settings and place test orders.
 
 The current code selects `https://sandbox-api.edpay.co.mz` for Sandbox and `https://api.edpay.co.mz` for Production. These API URLs are fixed in the plugin; confirm that they are correct for your EDPay account before testing.
 
 ## Current checkout behavior and limitations
 
-For a WooCommerce order, the plugin sends `amount_minor`, `currency`, a `WC-{order ID}` reference, return and cancel URLs, customer details, and order metadata to `POST /v1/payments`. It authenticates with `X-EDPay-Public-Key` and `X-EDPay-Private-Key`. The plugin redirects to the response's `payment_url` or `checkout_url` field.
+For a WooCommerce order, the plugin creates a link with `POST /v1/payment-links` (`amount_minor`, `currency`), then creates a hosted session with `POST /v1/checkout/sessions` (`payment_link_id`). Both requests use stable order-based idempotency keys. It builds the hosted URL from the returned token at `https://pay.edutecka.com/pay?token=...&pk=...`.
 
-This preview does not currently expose a payment-method selector or send a `method` field, and it does not send an `Idempotency-Key`. Confirm the required request fields and payment routing with EDPay before relying on this integration. Do not treat the customer's return to the store as proof of payment.
+The plugin stores the payment-link ID on the WooCommerce order. A webhook is applied only when `data.payment_link_id`, `type=payment.succeeded`, `status=succeeded`, amount, and currency match that order. This requires an API version that emits `data.payment_link_id`; the customer's return to the store is not proof of payment.
 
 ## Configure and test the webhook
 
@@ -46,7 +46,7 @@ In the EDPay dashboard, register this callback URL, replacing the hostname with 
 https://store.example/?wc-api=edpay_webhook
 ```
 
-Configure the webhook secret in the WooCommerce payment settings and subscribe to the payment lifecycle events your store needs. The plugin validates `X-EDPay-Signature` with HMAC-SHA256, then handles `payment.succeeded`, `payment.failed`, and `payment.canceled` events using the order ID in `data.metadata.order_id`.
+Configure the webhook secret in the WooCommerce payment settings and subscribe to payment lifecycle events. The plugin requires `Payment-Signature`, checks HMAC-SHA256 over `timestamp + "." + raw request body`, and defaults to a 300-second timestamp window. Duplicate or mismatched payment events are rejected.
 
 Before considering a live deployment, test successful, failed, and canceled payments, repeated webhook deliveries, invalid signatures, and missing or malformed webhook data in Sandbox. Confirm that duplicate deliveries do not cause unacceptable behavior for your store.
 
