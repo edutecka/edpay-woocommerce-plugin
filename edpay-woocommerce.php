@@ -172,26 +172,29 @@ function init_edpay_gateway_class()
                 'Accept' => 'application/json',
             ];
             $key_prefix = 'woocommerce-order-' . $order->get_id();
-            $link_response = wp_remote_post($this->get_base_url() . '/v1/payment-links', [
+            $payment_response = wp_remote_post($this->get_base_url() . '/v1/payments', [
                 'timeout' => 30,
-                'headers' => $headers + ['Idempotency-Key' => $key_prefix . '-link-create'],
-                'body' => wp_json_encode(['amount_minor' => $amount_minor, 'currency' => $currency]),
+                'headers' => $headers + ['Idempotency-Key' => $key_prefix . '-payment-create'],
+                'body' => wp_json_encode([
+                    'amount_minor' => $amount_minor, 'currency' => $currency,
+                    'reference' => (string) $order->get_id(), 'description' => 'WooCommerce order ' . $order->get_order_number(),
+                ]),
             ]);
-            if (is_wp_error($link_response)) {
-                wc_add_notice(__('Unable to communicate with the EDPay server: ', 'edpay-woocommerce') . $link_response->get_error_message(), 'error');
+            if (is_wp_error($payment_response)) {
+                wc_add_notice(__('Unable to communicate with the EDPay server: ', 'edpay-woocommerce') . $payment_response->get_error_message(), 'error');
                 return ['result' => 'fail'];
             }
-            $link_code = wp_remote_retrieve_response_code($link_response);
-            $link_body = json_decode(wp_remote_retrieve_body($link_response), true);
-            $link_id = $link_body['data']['id'] ?? '';
-            if ($link_code < 200 || $link_code >= 300 || !is_string($link_id) || $link_id === '') {
-                wc_add_notice(__('Unable to create an EDPay payment link.', 'edpay-woocommerce'), 'error');
+            $payment_code = wp_remote_retrieve_response_code($payment_response);
+            $payment_body = json_decode(wp_remote_retrieve_body($payment_response), true);
+            $payment_id = $payment_body['data']['id'] ?? '';
+            if ($payment_code < 200 || $payment_code >= 300 || !is_string($payment_id) || $payment_id === '') {
+                wc_add_notice(__('Unable to create an EDPay payment.', 'edpay-woocommerce'), 'error');
                 return ['result' => 'fail'];
             }
-            $session_response = wp_remote_post($this->get_base_url() . '/v1/checkout/sessions', [
+            $session_response = wp_remote_post($this->get_base_url() . '/v1/payments/' . rawurlencode($payment_id) . '/public-checkout', [
                 'timeout' => 30,
-                'headers' => $headers + ['Idempotency-Key' => $key_prefix . '-checkout-session'],
-                'body' => wp_json_encode(['payment_link_id' => $link_id]),
+                'headers' => $headers + ['Idempotency-Key' => $key_prefix . '-public-checkout'],
+                'body' => wp_json_encode((object) []),
             ]);
             if (is_wp_error($session_response)) {
                 wc_add_notice(__('Unable to communicate with the EDPay server: ', 'edpay-woocommerce') . $session_response->get_error_message(), 'error');
@@ -199,9 +202,9 @@ function init_edpay_gateway_class()
             }
             $session_code = wp_remote_retrieve_response_code($session_response);
             $session_body = json_decode(wp_remote_retrieve_body($session_response), true);
-            $token = $session_body['data']['token'] ?? '';
+            $token = $session_body['data']['token'] ?? $session_body['token'] ?? '';
             if ($session_code < 200 || $session_code >= 300 || !is_string($token) || $token === '') {
-                wc_add_notice(__('Unable to create an EDPay checkout session.', 'edpay-woocommerce'), 'error');
+                wc_add_notice(__('Unable to create an EDPay hosted checkout.', 'edpay-woocommerce'), 'error');
                 return ['result' => 'fail'];
             }
             $checkout_url = 'https://pay.edutecka.com/pay?' . http_build_query([
@@ -210,7 +213,8 @@ function init_edpay_gateway_class()
 
             // Put the order on hold while payment is pending.
             $order->update_status('on-hold', __('Awaiting payment through EDPay.', 'edpay-woocommerce'));
-            $order->update_meta_data('_edpay_payment_link_id', $link_id);
+            $order->update_meta_data('_edpay_checkout_payment_id', $payment_id);
+            $order->update_meta_data('_edpay_payment_reference', (string) $order->get_id());
             $order->save();
 
             WC()->cart->empty_cart();
@@ -264,13 +268,15 @@ function init_edpay_gateway_class()
 
             $event_type = $event['type'] ?? $event['event'] ?? '';
             $data       = $event['data'];
-            $payment_link_id = $data['payment_link_id'] ?? '';
+            $reference = $data['reference'] ?? '';
+            $payment_id = $data['id'] ?? '';
+            if (is_array($data['payment'] ?? null)) { $reference = $data['payment']['reference'] ?? $reference; $payment_id = $data['payment']['id'] ?? $payment_id; }
 
-            if (is_string($payment_link_id) && $payment_link_id !== '') {
+            if (is_string($reference) && $reference !== '') {
                 $orders = wc_get_orders([
                     'limit' => 1,
-                    'meta_key' => '_edpay_payment_link_id',
-                    'meta_value' => $payment_link_id,
+                    'meta_key' => '_edpay_payment_reference',
+                    'meta_value' => $reference,
                     'return' => 'objects',
                 ]);
                 $order = $orders[0] ?? null;
@@ -280,12 +286,12 @@ function init_edpay_gateway_class()
                     || strtoupper((string) ($data['currency'] ?? '')) !== strtoupper((string) $order->get_currency())
                     || empty($data['id'])) {
                     status_header(409);
-                    wp_send_json_error(['message' => 'Payment link, status, amount, or currency mismatch']);
+                    wp_send_json_error(['message' => 'Payment reference, status, amount, or currency mismatch']);
                 }
                 if ($order) {
                     if ($order->is_paid() || $order->get_meta('_edpay_payment_id')) {
                         status_header(409);
-                        wp_send_json_error(['message' => 'Payment link already processed']);
+                        wp_send_json_error(['message' => 'Payment already processed']);
                     }
                     if ($event_type === 'payment.succeeded') {
                         $order->add_meta_data('_edpay_payment_id', (string) $data['id'], true);

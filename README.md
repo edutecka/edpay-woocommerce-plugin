@@ -34,9 +34,9 @@ The current code selects `https://sandbox-api.edpay.co.mz` for Sandbox and `http
 
 ## Current checkout behavior and limitations
 
-For a WooCommerce order, the plugin creates a link with `POST /v1/payment-links` (`amount_minor`, `currency`), then creates a hosted session with `POST /v1/checkout/sessions` (`payment_link_id`). Both requests use stable order-based idempotency keys. It builds the hosted URL from the returned token at `https://pay.edutecka.com/pay?token=...&pk=...`.
+For a WooCommerce order, the plugin creates one parent payment with `POST /v1/payments`, then starts hosted checkout with `POST /v1/payments/{id}/public-checkout`. Both writes use stable order-based idempotency keys. It builds the hosted URL from the returned opaque token at `https://pay.edutecka.com/pay?token=...&pk=...`.
 
-The plugin stores the payment-link ID on the WooCommerce order. A webhook is applied only when `data.payment_link_id`, `type=payment.succeeded`, `status=succeeded`, amount, and currency match that order. This requires an API version that emits `data.payment_link_id`; the customer's return to the store is not proof of payment.
+The plugin stores the payment ID and reference on the WooCommerce order. A webhook is applied only when the reference, `type=payment.succeeded`, `status=succeeded`, amount, and currency match that order; the customer's return to the store is not proof of payment.
 
 ## Configure and test the webhook
 
