@@ -43,7 +43,6 @@ function init_edpay_gateway_class()
 
     class WC_Gateway_EDPay extends WC_Payment_Gateway
     {
-        private string $environment;
         private string $publicKey;
         private string $privateKey;
         private string $webhookSecret;
@@ -63,7 +62,6 @@ function init_edpay_gateway_class()
 
             $this->title               = $this->get_option('title', 'EDPay');
             $this->description         = $this->get_option('description', 'Choose from the payment methods available through EDPay.');
-            $this->environment         = $this->get_option('environment', 'sandbox');
             $this->publicKey           = trim((string) $this->get_option('public_key', ''));
             $this->privateKey          = trim((string) $this->get_option('private_key', ''));
             $this->webhookSecret       = $this->get_option('webhook_secret');
@@ -93,16 +91,6 @@ function init_edpay_gateway_class()
                     'type'        => 'textarea',
                     'description' => __('Description shown below the title at checkout.', 'edpay-woocommerce'),
                     'default'     => 'Choose from the payment methods available through EDPay.',
-                ],
-                'environment' => [
-                    'title'       => __('Environment', 'edpay-woocommerce'),
-                    'type'        => 'select',
-                    'description' => __('Select Sandbox to test before using the Production environment.', 'edpay-woocommerce'),
-                    'default'     => 'sandbox',
-                    'options'     => [
-                        'sandbox'    => __('Sandbox (Testing)', 'edpay-woocommerce'),
-                        'production' => __('Production', 'edpay-woocommerce'),
-                    ],
                 ],
                 'public_key' => [
                     'title'       => __('Public Key', 'edpay-woocommerce'),
@@ -137,9 +125,7 @@ function init_edpay_gateway_class()
 
         private function get_base_url(): string
         {
-            return $this->environment === 'production'
-                ? 'https://api.edpay.co.mz'
-                : 'https://sandbox-api.edpay.co.mz';
+            return 'https://api-pay.edutecka.com';
         }
 
         private function has_valid_partner_key_pair(): bool

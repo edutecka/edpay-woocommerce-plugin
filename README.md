@@ -26,11 +26,11 @@ Then open **WordPress Admin → Plugins** and activate **EDPay Multi-Gateway Che
 ## Configure Sandbox
 
 1. In WordPress Admin, open **WooCommerce → Settings → Payments → EDPay Multi-Gateway Checkout**.
-2. Enable the payment method and select **Sandbox**.
-3. Enter the Sandbox public key (`pk_test_...`), matching private key (`sk_test_...`), and webhook secret (`whsec_...`). Both API keys are required together and must use the same environment; the plugin checks this before creating a payment. Keep the private key and webhook secret on the server.
+2. Enable the payment method.
+3. For testing, enter a `pk_test_...` public key with its matching `sk_test_...` private key and webhook secret (`whsec_...`). For production, use the matching `pk_live_...` and `sk_live_...` pair. The key prefixes determine the mode; both use https://api-pay.edutecka.com. The plugin checks that both API keys are present and from the same mode. Keep the private key and webhook secret on the server.
 4. Save the settings and place test orders.
 
-The current code selects `https://sandbox-api.edpay.co.mz` for Sandbox and `https://api.edpay.co.mz` for Production. These API URLs are fixed in the plugin; confirm that they are correct for your EDPay account before testing.
+All requests use the single EDPay API host, `https://api-pay.edutecka.com`; the matching key prefixes determine test or production access.
 
 ## Current checkout behavior and limitations
 
