@@ -3,7 +3,7 @@
  * Plugin Name: EDPay Multi-Gateway Checkout for WooCommerce
  * Plugin URI: https://edpay.co.mz
  * Description: Accept payments through the methods available from EDPay in your WooCommerce store.
- * Version: 1.0.0
+ * Version: 1.6.0
  * Author: EDPay Engineering
  * Author URI: https://edpay.co.mz
  * Text Domain: edpay-woocommerce
